@@ -6,6 +6,8 @@
   <title>풍수해보험 가입통계 엑셀 취합기</title>
   <!-- 엑셀(.xlsx) 파싱 및 생성 라이브러리 (SheetJS) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Supabase 라이브러리 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -56,13 +58,15 @@
     .btn-blue:hover { background: #1d4ed8; }
     .btn-green { background: #16a34a; color: #fff; }
     .btn-green:hover { background: #15803d; }
+    .btn-red { background: #ef4444; color: #fff; }
+    .btn-red:hover { background: #dc2626; }
     .btn-white { background: #fff; border: 1px solid #94a3b8; color: #334155; }
     .btn-white:hover { background: #f1f5f9; }
 
     /* 메인 엑셀 업로드 박스 */
     .upload-cta-box {
       text-align: center;
-      padding: 32px 20px;
+      padding: 30px 20px;
       background: #ffffff;
       border: 2px dashed #3b82f6;
       border-radius: 12px;
@@ -117,7 +121,7 @@
     td.center { text-align: center; }
     .col-sum { background: #f8fafc; font-weight: 700; color: #2563eb; }
 
-    /* 소계 및 총합계 행 스타일 */
+    /* 소계 및 총합계 행 */
     tr.subtotal-row {
       background: #eff6ff !important;
       font-weight: 700;
@@ -173,24 +177,30 @@
 <body>
 
   <div class="container">
-    <header>
-      <h1>📊 풍수해보험 가입통계 엑셀 취합기</h1>
-      <p class="sub">각 보험사별 가입통계 엑셀 파일(.xlsx)을 업로드하면 시군구별·시도별로 각 보험사 실적과 합계를 피벗 비교표로 자동 취합합니다.</p>
+    <header style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+      <div>
+        <h1>📊 풍수해보험 가입통계 엑셀 취합기</h1>
+        <p class="sub">각 보험사별 가입통계 엑셀 파일(.xlsx)을 업로드하면 시군구별·시도별로 각 보험사 실적과 합계를 피벗 비교표로 취합하고 Supabase DB에 자동 저장합니다[cite: 3].</p>
+      </div>
+      <div>
+        <button type="button" class="btn-red" onclick="resetAllDataAndDB()">🔄 데이터 전체 초기화</button>
+      </div>
     </header>
 
     <!-- 1. 안내 박스 -->
     <div class="box guide-box">
       <h3 style="color:#1d4ed8; margin-bottom:6px;">📌 엑셀 파일 업로드 안내</h3>
       <ol>
-        <li>텍스트 변환 없이, <strong>엑셀 원본 파일(.xlsx, .xls)을 그대로</strong> 올리시면 됩니다.</li>
-        <li><strong>'주택 합계', '주택 상품 1/2/3', '소상공인 합계'</strong>가 각 보험사별로 정렬되며, <strong>시도별 소계</strong>가 자동 계산됩니다.</li>
+        <li>텍스트 변환 없이, <strong>엑셀 원본 파일(.xlsx, .xls)을 그대로</strong> 올리시면 됩니다[cite: 3].</li>
+        <li><strong>'주택 합계', '주택 상품 1/2/3', '소상공인 합계'</strong>가 각 보험사별로 정렬되며, <strong>시도별 소계</strong>가 자동 계산됩니다[cite: 3].</li>
+        <li>취합 완료 시 <strong>Supabase 클라우드 데이터베이스에 자동 백업</strong>되어 새로고침 후에도 유지됩니다.</li>
       </ol>
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
         <input type="file" id="sampleFileInput" accept=".xlsx, .xls" style="display:none;" onchange="onSampleUploaded(this)">
         <button type="button" class="btn-blue" onclick="document.getElementById('sampleFileInput').click()">📤 예시 엑셀 파일 등록</button>
         <button type="button" class="btn-white" onclick="downloadSampleInfo()">📥 예시 엑셀 파일 다운로드</button>
-
-        <span id="sampleStatusText" style="font-size:0.85rem; color:#16a34a; font-weight:600;"></span>
+        <button type="button" class="btn-green" onclick="loadDefaultSampleDirectly()" style="padding:8px 14px; font-size:0.85rem;">⚡ 기본 예시 엑셀 바로 적용하기</button>
+        <span id="sampleStatusText" style="font-size:0.85rem; color:#16a34a; font-weight:600;">(✔ 원본 가입통계.xlsx 기본 탑재됨)</span>
       </div>
     </div>
 
@@ -200,7 +210,7 @@
       <button type="button" class="btn-main-upload" onclick="document.getElementById('excelFileInput').click()">
         📑 보험사별 엑셀 파일(.xlsx) 업로드하기
       </button>
-      <p style="color:#64748b; font-size:0.88rem; margin-top:8px;">클릭하여 해당 보험사의 통계 엑셀 파일을 선택하세요.</p>
+      <p style="color:#64748b; font-size:0.88rem; margin-top:8px;">클릭하여 해당 보험사의 통계 엑셀 파일을 선택하세요[cite: 3].</p>
     </div>
 
     <!-- 3. 등록된 보험사 현황 배지 -->
@@ -212,14 +222,13 @@
       <div id="badgeContainer" style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;"></div>
     </div>
 
-    <!-- 4. 취합 결과 매트릭스 표 (보험사1, 보험사2, ... 합계 + 시도별 소계) -->
+    <!-- 4. 취합 결과 매트릭스 표 -->
     <div class="box" id="resultArea" style="display:none;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
         <h3>취합 결과 비교 (<span id="sigunguCountText">0</span>개 시군구 + 시도별 소계)</h3>
         <button type="button" class="btn-green" onclick="exportMatrixCsv()">📥 현재 탭 비교 CSV 다운로드</button>
       </div>
 
-      <!-- 메뉴(탭) 순서: 주택합계 -> 주택1 -> 주택2 -> 주택3 -> 소상공인 -->
       <div class="tab-bar">
         <button type="button" class="tab-btn active" id="tab_houseTotal" onclick="switchView('houseTotal')">🏠 주택 합계 가입건수</button>
         <button type="button" class="tab-btn" id="tab_p1" onclick="switchView('p1')">1️⃣ 주택1 합계 가입건수</button>
@@ -241,7 +250,7 @@
   <div class="modal-wrap" id="modalCompany">
     <div class="modal-box">
       <h3>보험사 선택</h3>
-      <p style="color:#64748b; font-size:0.9rem; margin-top:4px;" id="modalTitleText">업로드한 엑셀 파일의 보험사를 선택하세요.</p>
+      <p style="color:#64748b; font-size:0.9rem; margin-top:4px;" id="modalTitleText">업로드한 엑셀 파일의 보험사를 선택하세요[cite: 3].</p>
       
       <div class="company-grid">
         <label class="company-item"><input type="radio" name="cpName" value="삼성화재" checked> 삼성화재</label>
@@ -266,15 +275,26 @@
       <p style="margin:16px 0; font-size:0.95rem; line-height:1.5;" id="questionText">데이터가 등록되었습니다.<br><strong>추가로 등록할 다른 보험사 파일이 있습니까?</strong></p>
       
       <div style="display:flex; justify-content:center; gap:10px;">
-        <button type="button" class="btn-white" onclick="onFinishAll()">아니오 (취합 완료)</button>
+        <button type="button" class="btn-white" onclick="onFinishAll()">아니오 (취합 및 DB 저장)</button>
         <button type="button" class="btn-blue" onclick="onUploadAnother()">+ 예 (다른 보험사 올리기)</button>
       </div>
     </div>
   </div>
 
   <script>
-    // ★ 1. 기본 탑재된 실제 가입통계.xlsx 원본 데이터셋 (전국 250개 행 완벽 복원)
-    // 형식: [시도, 시군구, 주택소계, 상품1, 상품2, 상품3, 소상공인건수]
+    // 0. Supabase 클라이언트 초기화
+    const SUPABASE_URL = "https://tpklssuxhcgfsazxfubj.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_Z1NVpHshT1KBDGMWTe21DQ_7srBAihp";
+    let supabaseClient = null;
+    try {
+      if (window.supabase) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      }
+    } catch (e) {
+      console.warn("Supabase 초기화 경고:", e);
+    }
+
+    // 1. 기본 탑재된 가입통계.xlsx 원본 데이터셋
     var DEFAULT_EMBEDDED_DATA = [
       ["합계","",61182,2837,8808,49537,4774],
       ["서울 소계","",9654,131,4828,4695,595],
@@ -528,12 +548,10 @@
       ["제주","서귀포시",869,47,31,791,36]
     ];
 
-    // 기본 탑재 엑셀 워크북(2차원 배열 Grid) 자동 빌드 함수
     function buildDefaultGrid() {
       var grid = [];
       for (var i = 0; i < 7; i++) grid.push(new Array(35).fill(null));
 
-      // 헤더 세팅
       grid[3][3] = "(단위 : 원, 건, 세대 수, ㎡)";
       grid[4][3] = "주택";
       grid[4][32] = "소상공인";
@@ -549,23 +567,21 @@
       grid[6][4] = "소계";
       grid[6][7] = "소계";
 
-      // 데이터 250행 매핑
       for (var r = 0; r < DEFAULT_EMBEDDED_DATA.length; r++) {
         var d = DEFAULT_EMBEDDED_DATA[r];
         var rowArr = new Array(35).fill(0);
-        rowArr[1] = d[0]; // 시도
-        rowArr[2] = d[1]; // 시군구
-        rowArr[3] = d[2]; // 주택소계
-        rowArr[4] = d[3]; // 상품1
-        rowArr[6] = d[4]; // 상품2
-        rowArr[7] = d[5]; // 상품3
-        rowArr[32] = d[6]; // 소상공인
+        rowArr[1] = d[0];
+        rowArr[2] = d[1];
+        rowArr[3] = d[2];
+        rowArr[4] = d[3];
+        rowArr[6] = d[4];
+        rowArr[7] = d[5];
+        rowArr[32] = d[6];
         grid.push(rowArr);
       }
       return grid;
     }
 
-    // 상태 저장 변수
     var companyDataMap = {};
     var allCompanies = [];
     var sidoList = [];
@@ -574,7 +590,7 @@
 
     var pendingRawRows = null;
     var pendingFileName = "";
-    var customUploadedBlob = null; // 사용자가 '예시 엑셀 등록'으로 새로 올린 파일 저장용
+    var customUploadedBlob = null;
 
     var viewTitles = {
       houseTotal: "주택 합계",
@@ -584,18 +600,136 @@
       smallBiz: "소상공인 합계"
     };
 
-    // ★ 2. [예시 엑셀 등록 / 다운로드 기능]
+    // 2. Supabase DB에서 기존 데이터 불러오기
+    async function loadDataFromSupabase() {
+      if (!supabaseClient) return;
+      try {
+        const { data, error } = await supabaseClient
+          .from('insurance_stats')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (error) {
+          console.warn("DB 데이터 조회 실패:", error.message);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          companyDataMap = {};
+          allCompanies = [];
+          sidoList = [];
+          sidoToSigungu = {};
+
+          data.forEach(item => {
+            const cp = item.company;
+            if (!companyDataMap[cp]) {
+              companyDataMap[cp] = {};
+              allCompanies.push(cp);
+            }
+            const key = item.sido + "_" + item.sigungu;
+            companyDataMap[cp][key] = {
+              sido: item.sido,
+              sigungu: item.sigungu,
+              houseTotal: item.house_total,
+              p1: item.house_p1,
+              p2: item.house_p2,
+              p3: item.house_p3,
+              smallBiz: item.small_biz
+            };
+
+            if (!sidoToSigungu[item.sido]) {
+              sidoToSigungu[item.sido] = [];
+              sidoList.push(item.sido);
+            }
+            if (sidoToSigungu[item.sido].indexOf(item.sigungu) === -1) {
+              sidoToSigungu[item.sido].push(item.sigungu);
+            }
+          });
+
+          updateStatusUI();
+          renderMatrix();
+        }
+      } catch (err) {
+        console.warn("Supabase 복원 에러:", err);
+      }
+    }
+
+    // 3. Supabase DB로 데이터 동기화 저장
+    async function syncAllDataToSupabase() {
+      if (!supabaseClient) return;
+      try {
+        const batchId = crypto.randomUUID();
+        const recordsToInsert = [];
+
+        allCompanies.forEach(cp => {
+          Object.keys(companyDataMap[cp]).forEach(key => {
+            const r = companyDataMap[cp][key];
+            recordsToInsert.push({
+              batch_id: batchId,
+              company: cp,
+              sido: r.sido,
+              sigungu: r.sigungu,
+              house_total: r.houseTotal,
+              house_p1: r.p1,
+              house_p2: r.p2,
+              house_p3: r.p3,
+              small_biz: r.smallBiz
+            });
+          });
+        });
+
+        if (recordsToInsert.length === 0) return;
+
+        const chunkSize = 300;
+        for (let i = 0; i < recordsToInsert.length; i += chunkSize) {
+          const chunk = recordsToInsert.slice(i, i + chunkSize);
+          const { error } = await supabaseClient.from('insurance_stats').insert(chunk);
+          if (error) throw error;
+        }
+        console.log("Supabase DB 저장 완료!");
+      } catch (e) {
+        console.error("Supabase 저장 오류:", e.message);
+      }
+    }
+
+    // 4. 데이터 및 DB 전체 초기화
+    async function resetAllDataAndDB() {
+      if (!confirm("화면의 모든 통계 데이터와 Supabase 데이터베이스를 완전히 초기화(삭제)하시겠습니까?")) {
+        return;
+      }
+
+      companyDataMap = {};
+      allCompanies = [];
+      sidoList = [];
+      sidoToSigungu = {};
+
+      document.getElementById("statusArea").style.display = "none";
+      document.getElementById("resultArea").style.display = "none";
+      document.getElementById("badgeContainer").innerHTML = "";
+
+      if (supabaseClient) {
+        try {
+          const { error } = await supabaseClient.from('insurance_stats').delete().neq('company', '___DUMMY___');
+          if (error) throw error;
+          alert("데이터가 완전히 초기화되었습니다.");
+        } catch (e) {
+          alert("화면은 초기화되었으나 DB 삭제 중 오류가 발생했습니다: " + e.message);
+        }
+      } else {
+        alert("데이터가 초기화되었습니다.");
+      }
+    }
+
     function onSampleUploaded(input) {
       if (input.files && input.files.length > 0) {
         var file = input.files[0];
         customUploadedBlob = file;
-        document.getElementById("sampleStatusText").innerHTML = "<strong style='color:#16a34a;'>✔ [" + file.name + "]</strong> 파일로 교체 등록됨";
-        alert("예시 엑셀 파일이 성공적으로 교체 등록되었습니다.\n이제 '예시 엑셀 파일 다운로드'를 누르면 새로 올리신 [" + file.name + "] 파일이 다운로드됩니다.");
+        document.getElementById("sampleStatusText").innerHTML = "<strong style='color:#16a34a;'>✔ [" + file.name + "]</strong> 교체 등록됨";
+        alert("예시 파일이 교체되었습니다.");
       }
     }
 
     function downloadSampleInfo() {
-      // 1) 사용자가 직접 교체 등록한 파일이 있으면 그 파일 다운로드
       if (customUploadedBlob) {
         var url = URL.createObjectURL(customUploadedBlob);
         var a = document.createElement("a");
@@ -607,7 +741,6 @@
         return;
       }
 
-      // 2) 기본 상태일 때는 내장된 '가입통계.xlsx' 정품 양식을 SheetJS로 즉석 생성하여 다운로드
       var grid = buildDefaultGrid();
       var ws = XLSX.utils.aoa_to_sheet(grid);
       var wb = XLSX.utils.book_new();
@@ -624,15 +757,13 @@
       document.body.removeChild(link);
     }
 
-    // ★ 3. [기본 예시 엑셀 바로 적용하기] 원클릭 빠른 체험
     function loadDefaultSampleDirectly() {
       pendingRawRows = buildDefaultGrid();
       pendingFileName = "풍수해_가입통계_예시.xlsx";
-      document.getElementById("modalTitleText").innerText = "[" + pendingFileName + "] 파일의 보험사를 선택하세요.";
+      document.getElementById("modalTitleText").innerText = "[" + pendingFileName + "] 파일의 보험사를 선택하세요[cite: 3].";
       document.getElementById("modalCompany").style.display = "flex";
     }
 
-    // ★ 4. 실제 엑셀 파일(.xlsx) 업로드 처리
     function handleExcelUpload(input) {
       if (!input.files || input.files.length === 0) return;
       var file = input.files[0];
@@ -648,7 +779,7 @@
 
           pendingRawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: 0 });
 
-          document.getElementById("modalTitleText").innerText = "[" + file.name + "] 파일의 보험사를 선택하세요.";
+          document.getElementById("modalTitleText").innerText = "[" + file.name + "] 파일의 보험사를 선택하세요[cite: 3].";
           document.getElementById("modalCompany").style.display = "flex";
         } catch (err) {
           alert("엑셀 파일을 읽는 중 오류가 발생했습니다: " + err.message);
@@ -658,7 +789,6 @@
       input.value = "";
     }
 
-    // 5. 보험사 확인 및 적재
     function onCompanyConfirmed() {
       var radios = document.getElementsByName("cpName");
       var selectedCompany = "삼성화재";
@@ -672,7 +802,7 @@
 
       var rows = parseExcelData(pendingRawRows);
       if (rows.length === 0) {
-        alert("유효한 시군구 통계 데이터를 찾지 못했습니다.\n풍수해보험 통계 엑셀 양식인지 확인해 주세요.");
+        alert("유효한 시군구 통계 데이터를 찾지 못했습니다.");
         return;
       }
 
@@ -701,7 +831,6 @@
       document.getElementById("modalNextQuestion").style.display = "flex";
     }
 
-    // 6. 엑셀 정밀 파서 (B: 시도, C: 시군구, E: 상품1, G: 상품2, H: 상품3, AG: 소상공인)
     function parseExcelData(sheetGrid) {
       var parsed = [];
       var toInt = function(v) {
@@ -722,11 +851,11 @@
         if (!sido || sido.includes("합계") || sido.includes("소계")) continue;
         if (!sigungu || sigungu === "0" || sigungu.includes("소계") || sigungu.includes("합계")) continue;
 
-        var p1 = toInt(row[4]); // E열: 상품1
-        var p2 = toInt(row[6]); // G열: 상품2
-        var p3 = toInt(row[7]); // H열: 상품3
+        var p1 = toInt(row[4]);
+        var p2 = toInt(row[6]);
+        var p3 = toInt(row[7]);
         var houseTotal = p1 + p2 + p3;
-        var smallBiz = toInt(row[32]); // AG열: 소상공인
+        var smallBiz = toInt(row[32]);
 
         parsed.push({
           sido: sido,
@@ -745,9 +874,11 @@
       document.getElementById("modalNextQuestion").style.display = "none";
       document.getElementById("excelFileInput").click();
     }
-    function onFinishAll() {
+
+    async function onFinishAll() {
       document.getElementById("modalNextQuestion").style.display = "none";
       renderMatrix();
+      await syncAllDataToSupabase();
     }
 
     function updateStatusUI() {
@@ -766,7 +897,6 @@
       }
     }
 
-    // 7. 탭 전환
     function switchView(mode) {
       currentViewMode = mode;
       var tabs = ['houseTotal', 'p1', 'p2', 'p3', 'smallBiz'];
@@ -789,7 +919,6 @@
       return 0;
     }
 
-    // 8. 피벗 테이블 렌더링 (시도 소계 + 전국 총합계 포함)
     function renderMatrix() {
       document.getElementById("resultArea").style.display = "block";
 
@@ -838,7 +967,6 @@
           tbody.innerHTML += rowHtml;
         }
 
-        // [시도 소계]
         var subtotalHtml = "<tr class='subtotal-row'><td class='center'><strong>" + sido + "</strong></td><td class='center'><strong>소계</strong></td>";
         for (var cIdx = 0; cIdx < allCompanies.length; cIdx++) {
           var cSum = sidoCompanySums[cIdx];
@@ -850,7 +978,6 @@
         tbody.innerHTML += subtotalHtml;
       }
 
-      // [전국 총합계]
       var grandHtml = "<tr class='grandtotal-row'><td class='center' colspan='2'><strong>전국 총합계</strong></td>";
       for (var cIdx = 0; cIdx < allCompanies.length; cIdx++) {
         grandHtml += "<td>" + grandCompanySums[cIdx].toLocaleString() + "</td>";
@@ -861,10 +988,9 @@
       document.getElementById("resultArea").scrollIntoView({ behavior: "smooth" });
     }
 
-    // 9. 현재 탭 비교 CSV 다운로드
     function exportMatrixCsv() {
       var curTitle = viewTitles[currentViewMode];
-      var csv = "\uFEFF"; // BOM
+      var csv = "\uFEFF";
 
       csv += "시도,시군구";
       for (var c = 0; c < allCompanies.length; c++) {
@@ -923,6 +1049,9 @@
       link.click();
       document.body.removeChild(link);
     }
+
+    // 접속 시 Supabase DB에 저장된 내역 자동 조회
+    window.addEventListener("DOMContentLoaded", loadDataFromSupabase);
   </script>
 </body>
 </html>
